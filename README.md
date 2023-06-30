@@ -10,9 +10,13 @@
 
 This plugin allows Jenkins to communicate with a [Matrix](https://matrix.org) server.
 
-## Getting started
+## Usage
 
-TODO
+```groovy
+node {
+    matrixSendMessage hostname: 'matrix.example.org', accessTokenCredentialsId: 'my-credentials', roomId: 'my-room-id', body: 'Hello World', formattedBody: 'Hello <b>World</b>'
+}
+```
 
 ## Issues
 
