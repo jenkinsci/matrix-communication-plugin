@@ -15,7 +15,6 @@
   <properties>
     <changelist>999999-SNAPSHOT</changelist>
     <jenkins.version>2.387.3</jenkins.version>
-    <java.level>11</java.level>
     <gitHubRepo>jenkinsci/${project.artifactId}-plugin</gitHubRepo>
 
     <matrix-communication-client.version>1.4</matrix-communication-client.version>
