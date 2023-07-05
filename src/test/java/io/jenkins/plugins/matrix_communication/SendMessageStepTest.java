@@ -2,9 +2,9 @@ package io.jenkins.plugins.matrix_communication;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.cloudbees.plugins.credentials.Credentials;
 import com.cloudbees.plugins.credentials.CredentialsScope;
 import com.cloudbees.plugins.credentials.SystemCredentialsProvider;
+import com.cloudbees.plugins.credentials.common.IdCredentials;
 import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl;
 import com.cosium.matrix_communication_client.ClientEvent;
 import com.cosium.matrix_communication_client.CreateRoomInput;
@@ -15,13 +15,18 @@ import com.cosium.synapse_junit_extension.EnableSynapse;
 import com.cosium.synapse_junit_extension.Synapse;
 import hudson.model.Job;
 import hudson.model.queue.QueueTaskFuture;
+import hudson.util.Secret;
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 import jenkins.model.ParameterizedJobMixIn;
 import org.assertj.core.groups.Tuple;
+import org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
@@ -41,7 +46,50 @@ class SendMessageStepTest {
   }
 
   @Test
-  void test(Synapse synapse) throws Exception {
+  @DisplayName("With UsernamePasswordCredentials")
+  void test1(Synapse synapse) throws Exception {
+    test(
+        synapse,
+        accessToken -> {
+          SystemCredentialsProvider credentialsProvider = SystemCredentialsProvider.getInstance();
+          IdCredentials credentials =
+              new UsernamePasswordCredentialsImpl(
+                  CredentialsScope.GLOBAL, UUID.randomUUID().toString(), null, null, accessToken);
+          credentialsProvider.getCredentials().add(credentials);
+          try {
+            credentialsProvider.save();
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+          return credentials;
+        });
+  }
+
+  @Test
+  @DisplayName("With StringCredentials")
+  void test2(Synapse synapse) throws Exception {
+    test(
+        synapse,
+        accessToken -> {
+          SystemCredentialsProvider credentialsProvider = SystemCredentialsProvider.getInstance();
+          IdCredentials credentials =
+              new StringCredentialsImpl(
+                  CredentialsScope.GLOBAL,
+                  UUID.randomUUID().toString(),
+                  null,
+                  Secret.fromString(accessToken));
+          credentialsProvider.getCredentials().add(credentials);
+          try {
+            credentialsProvider.save();
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+          return credentials;
+        });
+  }
+
+  private void test(Synapse synapse, Function<String, IdCredentials> credentialsFactory)
+      throws Exception {
     MatrixResources matrixResources =
         MatrixResources.factory()
             .builder()
@@ -51,18 +99,8 @@ class SendMessageStepTest {
             .usernamePassword(synapse.adminUsername(), synapse.adminPassword())
             .build();
 
-    String accessTokenCredentialsId = UUID.randomUUID().toString();
-
-    SystemCredentialsProvider credentialsProvider = SystemCredentialsProvider.getInstance();
-    Credentials credentials =
-        new UsernamePasswordCredentialsImpl(
-            CredentialsScope.GLOBAL,
-            accessTokenCredentialsId,
-            null,
-            null,
-            matrixResources.accessTokens().create());
-    credentialsProvider.getCredentials().add(credentials);
-    credentialsProvider.save();
+    String accessTokenCredentialsId =
+        credentialsFactory.apply(matrixResources.accessTokens().create()).getId();
 
     CreateRoomInput createRoomInput =
         CreateRoomInput.builder()
