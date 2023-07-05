@@ -1,5 +1,7 @@
 package io.jenkins.plugins.matrix_communication;
 
+import static java.util.Objects.requireNonNull;
+
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.PasswordCredentials;
@@ -7,13 +9,16 @@ import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import com.cosium.matrix_communication_client.MatrixResources;
 import com.cosium.matrix_communication_client.Message;
 import hudson.Extension;
-import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.util.Secret;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nonnull;
+import javax.security.auth.login.CredentialNotFoundException;
 import jenkins.model.Jenkins;
 import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 import org.jenkinsci.plugins.workflow.steps.Step;
@@ -142,6 +147,8 @@ public class SendMessageStep extends Step {
 
   private static class Execution extends SynchronousNonBlockingStepExecution<Void> {
 
+    private static final Logger LOGGER = Logger.getLogger(Execution.class.getName());
+
     private boolean https;
     private String hostname;
     private Integer port;
@@ -157,49 +164,87 @@ public class SendMessageStep extends Step {
     }
 
     @Override
-    protected Void run() {
-
+    protected Void run() throws CredentialNotFoundException, IOException, InterruptedException {
       String accessToken = findAccessTokenSecret().map(Secret::getPlainText).orElse(null);
 
-      MatrixResources.factory()
-          .builder()
-          .https(https)
-          .hostname(hostname)
-          .port(port)
-          .accessToken(accessToken)
-          .build()
+      MatrixResources matrixResources =
+          MatrixResources.factory()
+              .builder()
+              .https(https)
+              .hostname(hostname)
+              .port(port)
+              .accessToken(accessToken)
+              .build();
+
+      TaskListener taskListener = getContext().get(TaskListener.class);
+      requireNonNull(taskListener, String.format("Could not retrieve %s", TaskListener.class));
+
+      String withAccessToken;
+      if (accessToken != null) {
+        withAccessToken = "with access token";
+      } else {
+        withAccessToken = "without access token";
+      }
+
+      taskListener
+          .getLogger()
+          .printf(
+              "Sending Matrix message {type: '%s', format: '%s', body: '%s', formattedBody: '%s'} to {https: %s, hostname: '%s', port: %s} %s%n",
+              type, format, body, formattedBody, https, hostname, port, withAccessToken);
+
+      matrixResources
           .rooms()
           .byId(roomId)
           .sendMessage(
               Message.builder()
-                  .body(body)
-                  .format(format)
-                  .formattedBody(formattedBody)
                   .type(type)
+                  .format(format)
+                  .body(body)
+                  .formattedBody(formattedBody)
                   .build());
+
+      taskListener.getLogger().println("Matrix message sent");
 
       return null;
     }
 
-    private Optional<Secret> findAccessTokenSecret() {
+    private Optional<Secret> findAccessTokenSecret() throws CredentialNotFoundException {
+      if (accessTokenCredentialsId == null) {
+        LOGGER.log(Level.FINE, "accessTokenCredentialsId is null");
+        return Optional.empty();
+      }
+
+      LOGGER.log(
+          Level.FINE,
+          () -> String.format("Looking for credentials with id '%s'", accessTokenCredentialsId));
+
       StandardCredentials accessTokenCredentials =
           CredentialsMatchers.firstOrNull(
               CredentialsProvider.lookupCredentials(
                   StandardCredentials.class, Jenkins.get(), null, Collections.emptyList()),
               CredentialsMatchers.withId(accessTokenCredentialsId));
 
+      if (accessTokenCredentials == null) {
+        throw new CredentialNotFoundException(
+            String.format("No credentials found for id '%s'", accessTokenCredentialsId));
+      }
+
       if (accessTokenCredentials instanceof StringCredentials) {
+        LOGGER.log(Level.FINE, () -> String.format("Found '%s'", accessTokenCredentials));
         return Optional.of(accessTokenCredentials)
             .map(StringCredentials.class::cast)
             .map(StringCredentials::getSecret);
       }
 
       if (accessTokenCredentials instanceof PasswordCredentials) {
+        LOGGER.log(Level.FINE, () -> String.format("Found '%s'", accessTokenCredentials));
         return Optional.of(accessTokenCredentials)
             .map(PasswordCredentials.class::cast)
             .map(PasswordCredentials::getPassword);
       }
-      return Optional.empty();
+
+      throw new CredentialNotFoundException(
+          String.format("Cannot handle %s", accessTokenCredentials));
     }
   }
 
@@ -213,7 +258,7 @@ public class SendMessageStep extends Step {
 
     @Override
     public Set<? extends Class<?>> getRequiredContext() {
-      return Set.of(Run.class, TaskListener.class);
+      return Set.of(TaskListener.class);
     }
 
     @Override
