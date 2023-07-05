@@ -3,6 +3,7 @@ package io.jenkins.plugins.matrix_communication;
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.PasswordCredentials;
+import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import com.cosium.matrix_communication_client.MatrixResources;
 import com.cosium.matrix_communication_client.Message;
 import hudson.Extension;
@@ -14,6 +15,7 @@ import java.util.Optional;
 import java.util.Set;
 import javax.annotation.Nonnull;
 import jenkins.model.Jenkins;
+import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 import org.jenkinsci.plugins.workflow.steps.Step;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 import org.jenkinsci.plugins.workflow.steps.StepDescriptor;
@@ -157,17 +159,7 @@ public class SendMessageStep extends Step {
     @Override
     protected Void run() {
 
-      PasswordCredentials accessTokenCredentials =
-          CredentialsMatchers.firstOrNull(
-              CredentialsProvider.lookupCredentials(
-                  PasswordCredentials.class, Jenkins.get(), null, Collections.emptyList()),
-              CredentialsMatchers.withId(accessTokenCredentialsId));
-
-      String accessToken =
-          Optional.ofNullable(accessTokenCredentials)
-              .map(PasswordCredentials::getPassword)
-              .map(Secret::getPlainText)
-              .orElse(null);
+      String accessToken = findAccessTokenSecret().map(Secret::getPlainText).orElse(null);
 
       MatrixResources.factory()
           .builder()
@@ -187,6 +179,27 @@ public class SendMessageStep extends Step {
                   .build());
 
       return null;
+    }
+
+    private Optional<Secret> findAccessTokenSecret() {
+      StandardCredentials accessTokenCredentials =
+          CredentialsMatchers.firstOrNull(
+              CredentialsProvider.lookupCredentials(
+                  StandardCredentials.class, Jenkins.get(), null, Collections.emptyList()),
+              CredentialsMatchers.withId(accessTokenCredentialsId));
+
+      if (accessTokenCredentials instanceof StringCredentials) {
+        return Optional.of(accessTokenCredentials)
+            .map(StringCredentials.class::cast)
+            .map(StringCredentials::getSecret);
+      }
+
+      if (accessTokenCredentials instanceof PasswordCredentials) {
+        return Optional.of(accessTokenCredentials)
+            .map(PasswordCredentials.class::cast)
+            .map(PasswordCredentials::getPassword);
+      }
+      return Optional.empty();
     }
   }
 
