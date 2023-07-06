@@ -17,7 +17,7 @@
     <jenkins.version>2.387.3</jenkins.version>
     <gitHubRepo>jenkinsci/${project.artifactId}-plugin</gitHubRepo>
 
-    <matrix-communication-client.version>1.7</matrix-communication-client.version>
+    <matrix-communication-client.version>1.8</matrix-communication-client.version>
 
     <synapse-junit-extension.version>1.1</synapse-junit-extension.version>
     <assertj.version>3.24.2</assertj.version>
