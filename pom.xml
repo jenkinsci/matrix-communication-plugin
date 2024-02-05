@@ -23,7 +23,7 @@
     <assertj.version>3.25.2</assertj.version>
     <logback-classic.version>1.4.14</logback-classic.version>
 
-    <git-code-format-maven-plugin.version>5.1</git-code-format-maven-plugin.version>
+    <git-code-format-maven-plugin.version>5.3</git-code-format-maven-plugin.version>
   </properties>
   <name>Matrix Communication Plugin</name>
   <url>https://github.com/jenkinsci/${project.artifactId}-plugin</url>
