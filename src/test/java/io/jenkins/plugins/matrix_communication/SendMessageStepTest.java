@@ -13,6 +13,7 @@ import com.cosium.matrix_communication_client.Message;
 import com.cosium.matrix_communication_client.RoomResource;
 import com.cosium.synapse_junit_extension.EnableSynapse;
 import com.cosium.synapse_junit_extension.Synapse;
+import hudson.model.Descriptor;
 import hudson.model.Job;
 import hudson.model.queue.QueueTaskFuture;
 import hudson.util.Secret;
@@ -51,17 +52,17 @@ class SendMessageStepTest {
     test(
         synapse,
         accessToken -> {
-          SystemCredentialsProvider credentialsProvider = SystemCredentialsProvider.getInstance();
-          IdCredentials credentials =
-              new UsernamePasswordCredentialsImpl(
-                  CredentialsScope.GLOBAL, UUID.randomUUID().toString(), null, null, accessToken);
-          credentialsProvider.getCredentials().add(credentials);
           try {
+            SystemCredentialsProvider credentialsProvider = SystemCredentialsProvider.getInstance();
+            IdCredentials credentials =
+                new UsernamePasswordCredentialsImpl(
+                    CredentialsScope.GLOBAL, UUID.randomUUID().toString(), null, null, accessToken);
+            credentialsProvider.getCredentials().add(credentials);
             credentialsProvider.save();
-          } catch (IOException e) {
+            return credentials;
+          } catch (Descriptor.FormException | IOException e) {
             throw new RuntimeException(e);
           }
-          return credentials;
         });
   }
 
